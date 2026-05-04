@@ -3,8 +3,6 @@ Build a small summary CSV with per-species:
   - global dN/dS, Ts/Tv
   - leading-strand dN/dS, Ts/Tv
   - lagging-strand dN/dS, Ts/Tv
-
-Reads from existing per-species output files (no rerun of pipelines needed).
 '''
 
 import pandas as pd
