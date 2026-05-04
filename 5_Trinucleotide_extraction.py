@@ -55,7 +55,7 @@ from collections import Counter
 import pickle
 import os
 
-base_dir = r'C:\Users\willi\OneDrive\Documents\University\Year 3\Semester 2\Capstone\Designated Species'
+base_dir = r'C:\Users\[USER]\...\Species_folder'
 
 species = [
     'A_baumannii', 'B_pertussis', 'C_jejuni', 'C_difficile', 'E_coli',
