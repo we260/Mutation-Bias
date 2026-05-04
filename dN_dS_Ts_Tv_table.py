@@ -11,7 +11,7 @@ import pandas as pd
 import pickle
 import os
 
-base_dir = r'C:\Users\willi\OneDrive\Documents\University\Year 3\Semester 2\Capstone\Designated Species'
+base_dir = r'C:\Users\[USER]\...\Species_folder'
 
 species_ordered = [
     ('A_baumannii', 'Acinetobacter_baumannii'),
