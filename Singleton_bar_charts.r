@@ -1,6 +1,6 @@
 library(ggplot2)
 
-base_dir <- "C:/Users/willi/OneDrive/Documents/University/Year 3/Semester 2/Capstone/Designated Species"
+base_dir <- r'C:\Users\[USER]\...\Species_folder'
 out_dir <- file.path(base_dir, "Final Figures")
 
 df <- read.csv(file.path(base_dir, "master_species_data.csv"))
