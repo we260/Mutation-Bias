@@ -1,0 +1,140 @@
+import pandas as pd
+import os
+from scipy.stats import fisher_exact
+
+base_dir = r'C:\Users\[USER]\...\Species_folder'
+
+species_ordered = [
+    ('A_baumannii', 'Acinetobacter_baumannii'),
+    ('B_pertussis', 'Bordetella_pertussis'),
+    ('C_jejuni', 'Campylobacter_jejuni'),
+    ('C_difficile', 'Clostridioides_difficile'),
+    ('E_coli', 'Escherichia_coli'),
+    ('H_influenzae', 'Haemophilus_influenzae'),
+    ('L_monocytogenes', 'Listeria_monocytogenes'),
+    ('M_tuberculosis_2', 'Mycobacterium_tuberculosis'),
+    ('N_gonorrhoeae', 'Neisseria_gonorrhoeae'),
+    ('N_meningitidis', 'Neisseria_meningitidis'),
+    ('P_aeruginosa', 'Pseudomonas_aeruginosa'),
+    ('S_aureus', 'Staphylococcus_aureus'),
+    ('S_epidermis', 'Staphylococcus_epidermidis'),
+    ('S_agalactiae', 'Streptococcus_agalactiae'),
+    ('S_pneumoniae', 'Streptococcus_pneumoniae'),
+    ('S_pyogenes', 'Streptococcus_pyogenes'),
+    ('V_cholerae', 'Vibrio_cholerae'),
+    ('S_typhimurium_2', 'Salmonella_typhimurium'),
+]
+
+bases = ['A', 'C', 'G', 'T']
+
+collapse_pairs = [
+    ('C>A / G>T', [('C', 'A'), ('G', 'T')], ['C', 'G']),
+    ('C>G / G>C', [('C', 'G'), ('G', 'C')], ['C', 'G']),
+    ('C>T / G>A', [('C', 'T'), ('G', 'A')], ['C', 'G']),
+    ('T>A / A>T', [('T', 'A'), ('A', 'T')], ['T', 'A']),
+    ('T>C / A>G', [('T', 'C'), ('A', 'G')], ['T', 'A']),
+    ('T>G / A>C', [('T', 'G'), ('A', 'C')], ['T', 'A']),
+]
+
+def direction_symbol(p, cds_rate, intergenic_rate):
+    if p is None or cds_rate is None or intergenic_rate is None:
+        return ''
+    if p >= 0.05:
+        return 'NS'
+    direction = '+' if cds_rate > intergenic_rate else '-'
+    if p < 0.01:
+        return direction + direction
+    return direction
+
+# Per-species per-mutation results
+results = {}
+
+for folder, full_name in species_ordered:
+    print('Processing: ' + folder)
+    
+    results_dir = os.path.join(base_dir, folder, 'results')
+    cvi_path = os.path.join(results_dir, 'coding_vs_intergenic_summary.csv')
+    
+    if not os.path.exists(cvi_path):
+        print('  Skipped: no coding_vs_intergenic_summary.csv')
+        continue
+    
+    cvi = pd.read_csv(cvi_path)
+    
+    cds_obs = dict(zip(cvi['mutation_type'], cvi['cds_observed']))
+    ig_obs = dict(zip(cvi['mutation_type'], cvi['intergenic_observed']))
+    cds_opp = dict(zip(cvi['mutation_type'], cvi['cds_opportunity']))
+    ig_opp = dict(zip(cvi['mutation_type'], cvi['intergenic_opportunity']))
+    
+    species_data = {}
+    
+    for label, raw_pairs, ref_bs in collapse_pairs:
+        cds_count = 0
+        ig_count = 0
+        for ref, alt in raw_pairs:
+            mt = ref + '>' + alt
+            cds_count += int(cds_obs.get(mt, 0))
+            ig_count += int(ig_obs.get(mt, 0))
+        
+        cds_opp_sum = 0
+        ig_opp_sum = 0
+        seen_refs = set()
+        for ref, alt in raw_pairs:
+            if ref in seen_refs:
+                continue
+            seen_refs.add(ref)
+            mt_for_lookup = ref + '>' + alt
+            cds_opp_sum += int(cds_opp.get(mt_for_lookup, 0))
+            ig_opp_sum += int(ig_opp.get(mt_for_lookup, 0))
+        
+        cds_rate = cds_count / cds_opp_sum * 1000 if cds_opp_sum > 0 else None
+        ig_rate = ig_count / ig_opp_sum * 1000 if ig_opp_sum > 0 else None
+        
+        if cds_opp_sum > 0 and ig_opp_sum > 0:
+            cds_other = cds_opp_sum - cds_count
+            ig_other = ig_opp_sum - ig_count
+            try:
+                _, p = fisher_exact([[cds_count, ig_count], [cds_other, ig_other]])
+            except Exception:
+                p = None
+        else:
+            p = None
+        
+        species_data[label] = {
+            'cds_rate': round(cds_rate, 4) if cds_rate is not None else None,
+            'ig_rate': round(ig_rate, 4) if ig_rate is not None else None,
+            'signif': direction_symbol(p, cds_rate, ig_rate),
+        }
+    
+    results[full_name] = species_data
+
+# Rows: groups of 3 per mutation type (CDS, Intergenic, Sig)
+# Columns: 'Change' label + one column per species
+species_cols = [full_name for _, full_name in species_ordered if full_name in results]
+
+table_rows = []
+
+for label, raw_pairs, ref_bs in collapse_pairs:
+    cds_row = {'Change': label + ' (CDS)'}
+    ig_row = {'Change': label + ' (Intergenic)'}
+    sig_row = {'Change': label + ' (Sig)'}
+    
+    for sp_name in species_cols:
+        sp_data = results[sp_name].get(label, {})
+        cds_row[sp_name] = sp_data.get('cds_rate', '')
+        ig_row[sp_name] = sp_data.get('ig_rate', '')
+        sig_row[sp_name] = sp_data.get('signif', '')
+    
+    table_rows.append(cds_row)
+    table_rows.append(ig_row)
+    table_rows.append(sig_row)
+
+out_df = pd.DataFrame(table_rows)
+
+out_path = os.path.join(base_dir, 'cds_vs_intergenic_spectrum_table.csv')
+out_df.to_csv(out_path, index=False)
+
+print('\n' + '=' * 60)
+print('Saved: ' + out_path)
+print('\nPreview:')
+print(out_df.head(9).to_string(index=False))
